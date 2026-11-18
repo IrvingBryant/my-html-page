@@ -56,6 +56,13 @@
     border-radius:18px; padding:12px 18px; font-size:15px; font-weight:700; cursor:pointer;
   }
   .mode-btn.sel { border-color:#FF6B8B; background:#FFF0F3; color:#FF6B8B; }
+  .voice-style-row { display:flex; align-items:center; gap:8px; font-size:14px; color:#8a8aa3; }
+  .vstyle-btn {
+    border:2px solid #E8E4F5; background:#fff; color:#4A3B8C;
+    border-radius:18px; padding:8px 14px; font-size:14px; font-weight:700; cursor:pointer;
+  }
+  .vstyle-btn:active { transform:scale(.94); }
+  .vstyle-btn.sel { border-color:#5AB6FF; background:#EAF4FF; color:#2E86DE; }
 
   /* ---------- 学习页 ---------- */
   #learnScreen { justify-content:flex-start; }
@@ -71,6 +78,10 @@
 
   .pic { font-size:120px; line-height:1; user-select:none;
     animation: floaty 3s ease-in-out infinite; cursor:pointer; }
+  .pic .num-pic { display:inline-block; font-size:150px; font-weight:800;
+    background:linear-gradient(135deg,#FF9A5A,#FF6B8B);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:2px; }
   @keyframes floaty { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-10px) scale(1.04)} }
   .pic.pop { animation: pop .35s ease; }
   .pic.squish { animation: squish .5s cubic-bezier(.3,1.6,.5,1); }
@@ -191,6 +202,11 @@
       <button class="mode-btn" id="modeChoice" onclick="setMode('choice')">🔤 选一选模式</button>
     </div>
     <p id="modeHint" style="font-size:13px;"></p>
+    <div class="voice-style-row">
+      <span>老师声音：</span>
+      <button class="vstyle-btn" id="vstyleChild" onclick="setVoiceStyle('child')">🧒 童声</button>
+      <button class="vstyle-btn" id="vstyleAdult" onclick="setVoiceStyle('adult')">👩 成人声</button>
+    </div>
     <button class="btn-start" onclick="startGame()">开始学习 🚀</button>
     <button class="gear" onclick="openSettings()">📚 词库管理</button>
   </div>
@@ -198,7 +214,7 @@
   <!-- 学习页 -->
   <div class="screen" id="learnScreen">
     <div class="topbar">
-      <div class="title">宝宝学英语</div>
+      <div class="title" id="roundTitle">宝宝学英语</div>
       <div class="right">
         <div class="stars" id="starCount">⭐ 0</div>
         <button class="mode-chip" id="modeChip" onclick="toggleMode()"></button>
@@ -233,6 +249,11 @@
       修改后点"保存词库"，会永久保存在这台手机上；也可以导入 txt/json 文件。
     </div>
     <textarea id="wordText" spellcheck="false"></textarea>
+    <div class="voice-style-row" style="justify-content:center;">
+      <span>声音：</span>
+      <button class="vstyle-btn" id="vstyleChild2" onclick="setVoiceStyle('child')">🧒 童声</button>
+      <button class="vstyle-btn" id="vstyleAdult2" onclick="setVoiceStyle('adult')">👩 成人声</button>
+    </div>
     <div class="set-row">
       <select id="voiceSel" class="voice-sel" onchange="onVoiceChange(this.value)"></select>
       <button class="btn-set" style="flex:0 0 auto;padding:12px 18px;" onclick="tryVoice()">🔊 试听</button>
@@ -258,37 +279,68 @@
 </div>
 
 <script>
-/* ================= 默认词库 ================= */
-const DEFAULT_WORDS = [
-  {en:"apple",     zh:"苹果",     emoji:"🍎"},
-  {en:"banana",    zh:"香蕉",     emoji:"🍌"},
-  {en:"cat",       zh:"小猫",     emoji:"🐱"},
-  {en:"dog",       zh:"小狗",     emoji:"🐶"},
-  {en:"duck",      zh:"鸭子",     emoji:"🦆"},
-  {en:"egg",       zh:"鸡蛋",     emoji:"🥚"},
-  {en:"fish",      zh:"小鱼",     emoji:"🐟"},
-  {en:"grape",     zh:"葡萄",     emoji:"🍇"},
-  {en:"ice cream", zh:"冰淇淋",   emoji:"🍦"},
-  {en:"juice",     zh:"果汁",     emoji:"🧃"},
-  {en:"kite",      zh:"风筝",     emoji:"🪁"},
-  {en:"lion",      zh:"狮子",     emoji:"🦁"},
-  {en:"milk",      zh:"牛奶",     emoji:"🥛"},
-  {en:"orange",    zh:"橙子",     emoji:"🍊"},
-  {en:"pig",       zh:"小猪",     emoji:"🐷"},
-  {en:"sun",       zh:"太阳",     emoji:"☀️"},
-  {en:"tiger",     zh:"老虎",     emoji:"🐯"},
-  {en:"umbrella",  zh:"雨伞",     emoji:"☂️"},
-  {en:"water",     zh:"水",       emoji:"💧"},
-  {en:"cake",      zh:"蛋糕",     emoji:"🍰"}
+/* ================= 默认词库（分类） ================= */
+const W = (en, zh, emoji, cat) => ({en, zh, emoji, cat});
+
+const COLOR_WORDS = [
+  W("red","红色","🔴","color"), W("yellow","黄色","🟡","color"),
+  W("blue","蓝色","🔵","color"), W("green","绿色","🟢","color"),
+  W("orange","橙色","🟠","color"), W("purple","紫色","🟣","color"),
+  W("pink","粉色","🌸","color"), W("black","黑色","⚫","color"),
+  W("white","白色","⚪","color"), W("brown","棕色","🟤","color")
 ];
+const FRUIT_WORDS = [
+  W("apple","苹果","🍎","fruit"), W("banana","香蕉","🍌","fruit"),
+  W("grape","葡萄","🍇","fruit"), W("orange fruit","橙子","🍊","fruit"),
+  W("strawberry","草莓","🍓","fruit"), W("watermelon","西瓜","🍉","fruit"),
+  W("peach","桃子","🍑","fruit"), W("pear","梨","🍐","fruit"),
+  W("cherry","樱桃","🍒","fruit"), W("lemon","柠檬","🍋","fruit"),
+  W("mango","芒果","🥭","fruit"), W("pineapple","菠萝","🍍","fruit"),
+  W("kiwi","猕猴桃","🥝","fruit"), W("coconut","椰子","🥥","fruit")
+];
+const ANIMAL_WORDS = [
+  W("cat","小猫","🐱","animal"), W("dog","小狗","🐶","animal"),
+  W("duck","鸭子","🦆","animal"), W("fish","小鱼","🐟","animal"),
+  W("lion","狮子","🦁","animal"), W("tiger","老虎","🐯","animal"),
+  W("monkey","猴子","🐵","animal"), W("elephant","大象","🐘","animal"),
+  W("panda","熊猫","🐼","animal"), W("rabbit","兔子","🐰","animal"),
+  W("bear","熊","🐻","animal"), W("horse","马","🐴","animal"),
+  W("cow","奶牛","🐮","animal"), W("sheep","绵羊","🐑","animal"),
+  W("pig","小猪","🐷","animal"), W("frog","青蛙","🐸","animal"),
+  W("snake","蛇","🐍","animal"), W("giraffe","长颈鹿","🦒","animal"),
+  W("zebra","斑马","🦓","animal"), W("fox","狐狸","🦊","animal"),
+  W("deer","鹿","🦌","animal"), W("owl","猫头鹰","🦉","animal"),
+  W("dolphin","海豚","🐬","animal"), W("whale","鲸鱼","🐳","animal"),
+  W("turtle","乌龟","🐢","animal")
+];
+const NUM_ZH = ["零","一","二","三","四","五","六","七","八","九","十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十"];
+const NUM_EN = ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen","twenty"];
+const NUMBER_WORDS = NUM_EN.map((en,i)=>{
+  const w = W(en, NUM_ZH[i], "🔢", "number");
+  w.num = String(i);   // 大号数字文本显示
+  return w;
+});
+(function(){
+  const h = W("one hundred","一百","💯","number"); h.num = "100"; NUMBER_WORDS.push(h);
+  const t = W("one thousand","一千","🔢","number"); t.num = "1000"; NUMBER_WORDS.push(t);
+})();
+const DAILY_WORDS = [
+  W("egg","鸡蛋","🥚","daily"), W("ice cream","冰淇淋","🍦","daily"),
+  W("juice","果汁","🧃","daily"), W("kite","风筝","🪁","daily"),
+  W("milk","牛奶","🥛","daily"), W("sun","太阳","☀️","daily"),
+  W("umbrella","雨伞","☂️","daily"), W("water","水","💧","daily"),
+  W("cake","蛋糕","🍰","daily")
+];
+const DEFAULT_WORDS = [].concat(COLOR_WORDS, FRUIT_WORDS, ANIMAL_WORDS, NUMBER_WORDS, DAILY_WORDS);
 
 const ALIAS = {
   "cat":["kitty","kitten","a cat"], "dog":["puppy","doggy","a dog"],
   "duck":["a duck"], "fish":["a fish"], "lion":["a lion"], "pig":["a pig"],
   "tiger":["a tiger"], "apple":["an apple"], "egg":["an egg","eggs"],
-  "orange":["an orange"], "ice cream":["icecream","cream"]
+  "orange fruit":["orange","an orange"], "ice cream":["icecream","cream"],
+  "one hundred":["hundred","a hundred"], "one thousand":["thousand","a thousand"]
 };
-const STORE_KEY = "babyEnglishWords";
+const STORE_KEY = "babyEnglishWords_v3";   // 升级版本号以载入扩充词库
 
 /* ================= 词库读写 ================= */
 function loadWords(){
@@ -297,6 +349,20 @@ function loadWords(){
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.length) return arr;
+    }
+    // 迁移旧词库：把旧自定义词合并进新词库（按英文去重，新版优先）
+    const oldRaw = localStorage.getItem("babyEnglishWords");
+    if (oldRaw) {
+      const oldArr = JSON.parse(oldRaw);
+      if (Array.isArray(oldArr) && oldArr.length) {
+        const seen = new Set();
+        const merged = [];
+        DEFAULT_WORDS.concat(oldArr).forEach(w=>{
+          const k = (w.en||"").toLowerCase();
+          if (k && !seen.has(k)) { seen.add(k); merged.push(w); }
+        });
+        return merged;
+      }
     }
   } catch(e){}
   return DEFAULT_WORDS.slice();
@@ -331,6 +397,9 @@ let order = [], idx = 0, stars = 0, correctCnt = 0;
 let busy = false, revealed = false;
 let mode = "speak";   // speak = 跟读(需联网) / choice = 选一选(离线可用)
 let lastMicFail = false;
+let wrongWords = [];   // 错词池：读错/跳过的词，本轮结束后反复出现加深记忆
+let round = 1;         // 当前轮次（第1轮学全部，之后只复习错词）
+const MAX_ROUNDS = 6;  // 最多复习轮次，防止无限循环
 
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -339,15 +408,19 @@ const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Mac/.test(navigato
 const autoListenAllowed = hasSR && !isIOS;   // iPhone 上系统要求每次点击才能收音
 
 /* ================= 语音合成 ================= */
-/* 挑选最自然的英文发音人：优先 Natural / Neural / Samantha 等高质量音色 */
-const VOICE_PREFER = [/natural/i, /neural/i, /aria/i, /jenny/i, /samantha/i, /google us english/i, /karen/i, /moira/i, /tessa/i, /serena/i];
+/* 声音风格：child=童声(高音调+优选年轻女声) / adult=成人自然声 */
+let voiceStyle = localStorage.getItem('babyVoiceStyle') || 'child';
+const VOICE_PREFER_ADULT = [/natural/i, /neural/i, /aria/i, /jenny/i, /samantha/i, /google us english/i, /karen/i, /moira/i, /tessa/i, /serena/i];
+const VOICE_PREFER_CHILD = [/samantha/i, /jenny/i, /aria/i, /zira/i, /female/i, /karen/i, /moira/i, /tessa/i, /serena/i, /google us english/i, /natural/i, /neural/i];
 function pickVoice(){
   if (!('speechSynthesis' in window)) return null;
   const voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
   if (!voices.length) return null;
   const saved = localStorage.getItem('babyTtsVoice');
   if (saved) { const v = voices.find(v=>v.name===saved); if (v) return v; }
-  for (const p of VOICE_PREFER) {
+  // 童声优先选名字偏年轻/女声的音色
+  const prefer = voiceStyle === 'child' ? VOICE_PREFER_CHILD : VOICE_PREFER_ADULT;
+  for (const p of prefer) {
     const v = voices.find(v=>p.test(v.name));
     if (v) return v;
   }
@@ -357,11 +430,27 @@ function speak(text, rate, onend){
   if (!('speechSynthesis' in window)) { if(onend) onend(); return; }
   try { speechSynthesis.cancel(); } catch(e){}
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = rate || 0.78; u.pitch = 1.05;
+  // 童声：音调调高 + 语速略慢，模仿儿童清脆的发音
+  u.lang = 'en-US';
+  u.rate  = rate || (voiceStyle === 'child' ? 0.8 : 0.86);
+  u.pitch = voiceStyle === 'child' ? 1.65 : 1.05;
   const v = pickVoice();
   if (v) u.voice = v;
   if (onend) u.onend = onend;
   speechSynthesis.speak(u);
+}
+function setVoiceStyle(style){
+  voiceStyle = style;
+  localStorage.setItem('babyVoiceStyle', style);
+  // 切换风格后清除手动指定的发音人，让系统按新风格自动挑选
+  localStorage.removeItem('babyTtsVoice');
+  updateVoiceStyleUI();
+  fillVoices();
+  speak('Hello!', 0.9);   // 试听一句
+}
+function updateVoiceStyleUI(){
+  ['vstyleChild','vstyleChild2'].forEach(id=>{ const el=$(id); if(el) el.classList.toggle('sel', voiceStyle === 'child'); });
+  ['vstyleAdult','vstyleAdult2'].forEach(id=>{ const el=$(id); if(el) el.classList.toggle('sel', voiceStyle === 'adult'); });
 }
 if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = ()=>{ speechSynthesis.getVoices(); fillVoices(); };
@@ -468,9 +557,19 @@ function checkAnswer(alts){
   const t = matchType(alts);
   judge(!!t, t === 'fuzzy');
 }
+function addWrong(w){
+  if (!w) return;
+  if (!wrongWords.some(x=>x.en===w.en)) wrongWords.push(w);
+}
+function removeWrong(w){
+  if (!w) return;
+  wrongWords = wrongWords.filter(x=>x.en!==w.en);
+}
 function judge(ok, fuzzy){
+  const cur = order[idx];
   if (ok) {
     correctCnt++; addStar();
+    removeWrong(cur);   // 答对后从错词池移除
     setFeedback('good', fuzzy ? '🌟 发音很接近，也算你对啦！继续保持！' : '🎉 答对啦！你真棒！');
     speak(fuzzy ? 'Good try!' : 'Great job!', 1.0);
     soundWin();
@@ -478,6 +577,7 @@ function judge(ok, fuzzy){
     $('card').classList.add('correct-glow');
     setTimeout(()=>{ $('card').classList.remove('correct-glow'); nextWord(false); }, 1100);
   } else {
+    addWrong(cur);      // 答错记入错词池，稍后反复出现
     setFeedback('bad','😅 不太对哦，再试一次！');
     speak('Try again');
     soundFail();
@@ -517,6 +617,7 @@ function shuffle(a){
 function startGame(){
   if (!WORDS.length) { alert('词库是空的，请先在"词库管理"里添加单词'); return; }
   order = shuffle(WORDS); idx = 0; stars = 0; correctCnt = 0;
+  wrongWords = []; round = 1;
   $('starCount').textContent = '⭐ 0';
   show('learnScreen');
   renderWord();
@@ -527,7 +628,11 @@ function renderWord(){
   busy = false; revealed = false;
   const w = order[idx];
   const useSpeak = (mode === 'speak') && hasSR;
-  $('pic').textContent = w.emoji;
+  if (w.num !== undefined && w.num !== null) {
+    $('pic').innerHTML = '<span class="num-pic">' + w.num + '</span>';
+  } else {
+    $('pic').textContent = w.emoji;
+  }
   $('pic').classList.remove('pop','squish'); void $('pic').offsetWidth; $('pic').classList.add('pop');
   setTimeout(()=> $('pic').classList.remove('pop'), 400);   // 入场动画结束后恢复悬浮
   $('zhName').textContent = w.zh;
@@ -537,6 +642,7 @@ function renderWord(){
   $('micTip').style.display = useSpeak ? 'block' : 'none';
   $('choices').style.display = useSpeak ? 'none' : 'grid';
   $('modeChip').textContent = useSpeak ? '🎤 跟读中' : '🔤 选一选';
+  $('roundTitle').textContent = round > 1 ? ('🔁 复习第 ' + (round-1) + ' 轮') : '宝宝学英语';
   if (useSpeak) {
     setFeedback('hint','大声念出来吧！🎤');
     setTip(autoListenAllowed ? '我在听，直接说就行 👂 念完自动判定' : '点麦克风说话，念完再点一下就判定 ✅');
@@ -580,11 +686,25 @@ function renderChoices(w){
   });
 }
 function nextWord(skipped){
+  if (skipped) addWrong(order[idx]);   // 手动跳过的词也记入错词池
   idx++;
-  if (idx >= order.length) { finish(); return; }
+  if (idx >= order.length) { endOfRound(); return; }
   renderWord();
 }
-function giveUp(){ teachThenNext(); }
+function endOfRound(){
+  // 本轮结束：若错词池非空且未达轮次上限，进入复习轮反复练
+  if (wrongWords.length > 0 && round < MAX_ROUNDS) {
+    round++;
+    order = shuffle(wrongWords.slice());
+    wrongWords = [];   // 复习时重新收集仍答错的
+    idx = 0;
+    renderWord();
+    setFeedback('hint','🔁 复习时间！这几个词再练一遍，加深记忆～');
+  } else {
+    finish();
+  }
+}
+function giveUp(){ addWrong(order[idx]); teachThenNext(); }
 function teachThenNext(){
   const w = order[idx];
   revealed = true; busy = true;
@@ -609,12 +729,19 @@ function addStar(){
 }
 function finish(){
   $('progressBar').style.width = '100%';
-  const total = order.length;
-  const rating = correctCnt >= total*0.8 ? 3 : correctCnt >= total*0.5 ? 2 : 1;
+  const total = WORDS.length;
+  // 全部过关（错词池清空）给3星，达到轮次上限仍有错词则按剩余量给星
+  let rating = 3;
+  if (wrongWords.length > 0) {
+    rating = wrongWords.length <= total*0.2 ? 2 : (wrongWords.length <= total*0.5 ? 2 : 1);
+  }
   let starStr = '';
   for(let i=0;i<3;i++) starStr += i<rating ? '⭐' : '☆';
   $('finalStars').textContent = starStr;
-  $('scoreLine').textContent = '答对了 ' + correctCnt + ' / ' + total + ' 个单词，真厉害！';
+  const doneMsg = wrongWords.length === 0
+    ? '太厉害啦，' + total + ' 个单词全部掌握！⭐\n共获得 ' + stars + ' 颗星星'
+    : '完成了 ' + total + ' 个单词的学习！\n还有 ' + wrongWords.length + ' 个词要多练练，下次再加油～';
+  $('scoreLine').innerHTML = doneMsg.replace(/\n/g,'<br>');
   show('endScreen');
   confetti(); confetti();
   speak('Well done!');
@@ -792,6 +919,7 @@ document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
 
 /* 初始化 */
 setMode(hasSR ? 'speak' : 'choice');
+updateVoiceStyleUI();
 </script>
 </body>
 </html>
