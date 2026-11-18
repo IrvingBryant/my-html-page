@@ -63,6 +63,13 @@
   }
   .vstyle-btn:active { transform:scale(.94); }
   .vstyle-btn.sel { border-color:#5AB6FF; background:#EAF4FF; color:#2E86DE; }
+  .rsize-row { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; font-size:13px; color:#8a8aa3; }
+  .rsize-btn {
+    border:2px solid #E8E4F5; background:#fff; color:#4A3B8C;
+    border-radius:14px; padding:6px 11px; font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .rsize-btn:active { transform:scale(.92); }
+  .rsize-btn.sel { border-color:#7ED07E; background:#EFFAEA; color:#2FA84F; }
 
   /* ---------- 学习页 ---------- */
   #learnScreen { justify-content:flex-start; }
@@ -78,19 +85,26 @@
 
   .pic { font-size:120px; line-height:1; user-select:none;
     animation: floaty 3s ease-in-out infinite; cursor:pointer; }
-  .pic .num-pic {
-    display:inline-flex; align-items:center; justify-content:center;
-    min-width:164px; height:164px; padding:0 22px;
-    border-radius:36px;
-    background:linear-gradient(140deg,#FFB36B 0%,#FF7B9C 100%);
-    color:#ffffff;                 /* 实色白字，避免渐变裁剪文字的兼容问题 */
-    font-weight:900; font-size:120px; line-height:1; letter-spacing:1px;
-    box-shadow:0 10px 22px rgba(255,123,156,.35);
-    text-shadow:0 2px 6px rgba(180,60,90,.25);
+  /* 数字卡片：纯色背景 + 普通文字，避免 Safari 上 gradient/inline-flex 的渲染问题 */
+  .num-pic {
+    display:inline-block;
+    background:#FF8FA3;
+    color:#ffffff;
+    font-weight:700;
+    font-size:110px;
+    line-height:160px;
+    text-align:center;
+    letter-spacing:2px;
+    min-width:170px;
+    height:160px;
+    padding:0 20px;
+    border-radius:32px;
   }
-  .pic .num-pic.len2 { font-size:100px; min-width:180px; height:150px; }
-  .pic .num-pic.len3 { font-size:74px;  min-width:196px; height:130px; }
-  .pic .num-pic.len4 { font-size:58px;  min-width:210px; height:116px; }
+  .num-pic.len2 { font-size:90px;  line-height:140px; height:140px; min-width:186px; }
+  .num-pic.len3 { font-size:70px;  line-height:120px; height:120px; min-width:196px; }
+  .num-pic.len4 { font-size:54px;  line-height:108px; height:108px; min-width:210px; }
+  /* 版本号角标，用来确认是否加载了最新版 */
+  .ver-badge { position:absolute; top:6px; right:10px; font-size:11px; color:#C9C4D6; }
   @keyframes floaty { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-10px) scale(1.04)} }
   .pic.pop { animation: pop .35s ease; }
   .pic.squish { animation: squish .5s cubic-bezier(.3,1.6,.5,1); }
@@ -203,9 +217,10 @@
 
   <!-- 开始页 -->
   <div class="screen active" id="startScreen">
+    <span class="ver-badge">v4.1</span>
     <div class="big-emoji">🎈📚</div>
     <h1>宝宝学英语</h1>
-    <p>每轮随机学 10 个单词，念对得星星 ⭐<br>读错的会自动进入复习轮再来一遍 🔁<br>看图片 → 大声念出来 🎤</p>
+    <p>每轮随机学几个词，可自己设置（默认10）⭐<br>读错的会自动进入复习轮再来一遍 🔁<br>看图片 → 大声念出来 🎤</p>
     <div class="mode-select">
       <button class="mode-btn" id="modeSpeak" onclick="setMode('speak')">🎤 跟读模式</button>
       <button class="mode-btn" id="modeChoice" onclick="setMode('choice')">🔤 选一选模式</button>
@@ -215,6 +230,14 @@
       <span>老师声音：</span>
       <button class="vstyle-btn" id="vstyleChild" onclick="setVoiceStyle('child')">🧒 童声</button>
       <button class="vstyle-btn" id="vstyleAdult" onclick="setVoiceStyle('adult')">👩 成人声</button>
+    </div>
+    <div class="rsize-row">
+      <span>每轮学：</span>
+      <button class="rsize-btn" data-n="5" onclick="setRoundSize(5)">5个</button>
+      <button class="rsize-btn" data-n="8" onclick="setRoundSize(8)">8个</button>
+      <button class="rsize-btn" data-n="10" onclick="setRoundSize(10)">10个</button>
+      <button class="rsize-btn" data-n="15" onclick="setRoundSize(15)">15个</button>
+      <button class="rsize-btn" data-n="20" onclick="setRoundSize(20)">20个</button>
     </div>
     <button class="btn-start" onclick="startGame()">开始学习 🚀</button>
     <button class="gear" onclick="openSettings()">📚 词库管理</button>
@@ -233,6 +256,7 @@
     <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
 
     <div class="card" id="card">
+      <span class="ver-badge">v4.1</span>
       <div class="pic" id="pic">🍎</div>
       <div class="zh-name" id="zhName">苹果</div>
       <div class="en-name" id="enName">apple</div>
@@ -262,6 +286,14 @@
       <span>声音：</span>
       <button class="vstyle-btn" id="vstyleChild2" onclick="setVoiceStyle('child')">🧒 童声</button>
       <button class="vstyle-btn" id="vstyleAdult2" onclick="setVoiceStyle('adult')">👩 成人声</button>
+    </div>
+    <div class="rsize-row">
+      <span>每轮学：</span>
+      <button class="rsize-btn" data-n="5" onclick="setRoundSize(5)">5个</button>
+      <button class="rsize-btn" data-n="8" onclick="setRoundSize(8)">8个</button>
+      <button class="rsize-btn" data-n="10" onclick="setRoundSize(10)">10个</button>
+      <button class="rsize-btn" data-n="15" onclick="setRoundSize(15)">15个</button>
+      <button class="rsize-btn" data-n="20" onclick="setRoundSize(20)">20个</button>
     </div>
     <div class="set-row">
       <select id="voiceSel" class="voice-sel" onchange="onVoiceChange(this.value)"></select>
@@ -400,6 +432,17 @@ function parseText(text){
   return out.filter(w => { const k=w.en+"|"+w.zh; if(seen.has(k))return false; seen.add(k); return true; });
 }
 
+/* 英文数字名→显示数字（兼容无 num 字段的旧词库数据） */
+const EN_TO_NUM = {zero:"0",one:"1",two:"2",three:"3",four:"4",five:"5",six:"6",seven:"7",
+  eight:"8",nine:"9",ten:"10",eleven:"11",twelve:"12",thirteen:"13",fourteen:"14",
+  fifteen:"15",sixteen:"16",seventeen:"17",eighteen:"18",nineteen:"19",twenty:"20",
+  "one hundred":"100",hundred:"100","one thousand":"1000",thousand:"1000"};
+function numForWord(w){
+  if (!w) return null;
+  if (w.num !== undefined && w.num !== null && String(w.num) !== '') return String(w.num);
+  return EN_TO_NUM[(w.en||'').toLowerCase()] || null;
+}
+
 /* ================= 状态 ================= */
 let WORDS = loadWords();
 let order = [], idx = 0, stars = 0, correctCnt = 0;
@@ -407,10 +450,27 @@ let busy = false, revealed = false;
 let mode = "speak";   // speak = 跟读(需联网) / choice = 选一选(离线可用)
 let lastMicFail = false;
 let wrongWords = [];   // 错词池：读错/跳过的词，本轮结束后反复出现加深记忆
-let round = 1;         // 当前轮次（第1轮学10个，之后只复习错词）
-const ROUND_SIZE = 10; // 每轮练习的单词数（从词库随机抽）
+let round = 1;         // 当前轮次（第1轮学 N 个，之后只复习错词）
+const ROUND_OPTIONS = [5, 8, 10, 15, 20];  // 可选择的每轮词数
+let roundSize = getRoundSize();  // 每轮练习的单词数（用户可设置）
 let roundWordCount = 0;// 本轮实际抽取的词数，用于通关统计
-const MAX_ROUNDS = 6;  // 最多复习轮次，防止无限循环
+const MAX_ROUNDS = 3;  // 最多复习轮次，防止无限循环
+
+function getRoundSize(){
+  const v = parseInt(localStorage.getItem('babyRoundSize'), 10);
+  return ROUND_OPTIONS.indexOf(v) >= 0 ? v : 10;   // 默认10
+}
+function setRoundSize(n){
+  if (ROUND_OPTIONS.indexOf(n) < 0) return;
+  roundSize = n;
+  localStorage.setItem('babyRoundSize', String(n));
+  updateRoundSizeUI();
+}
+function updateRoundSizeUI(){
+  document.querySelectorAll('.rsize-btn').forEach(b=>{
+    b.classList.toggle('sel', parseInt(b.getAttribute('data-n'),10) === roundSize);
+  });
+}
 
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -627,8 +687,8 @@ function shuffle(a){
 }
 function startGame(){
   if (!WORDS.length) { alert('词库是空的，请先在"词库管理"里添加单词'); return; }
-  // 每轮只随机抽 10 个词（词库不足10个则全取），不用学完整个词库
-  order = shuffle(WORDS).slice(0, ROUND_SIZE);
+  // 每轮随机抽 N 个词（词库不足则全取），不用学完整个词库
+  order = shuffle(WORDS).slice(0, roundSize);
   roundWordCount = order.length;
   idx = 0; stars = 0; correctCnt = 0;
   wrongWords = []; round = 1;
@@ -642,11 +702,11 @@ function renderWord(){
   busy = false; revealed = false;
   const w = order[idx];
   const useSpeak = (mode === 'speak') && hasSR;
-  if (w.num !== undefined && w.num !== null) {
-    const numStr = String(w.num);
+  const numStr = numForWord(w);
+  if (numStr) {
     $('pic').innerHTML = '<span class="num-pic len' + numStr.length + '">' + numStr + '</span>';
   } else {
-    $('pic').textContent = w.emoji;
+    $('pic').textContent = w.emoji || '🔤';
   }
   $('pic').classList.remove('pop','squish'); void $('pic').offsetWidth; $('pic').classList.add('pop');
   setTimeout(()=> $('pic').classList.remove('pop'), 400);   // 入场动画结束后恢复悬浮
@@ -744,7 +804,7 @@ function addStar(){
 }
 function finish(){
   $('progressBar').style.width = '100%';
-  const total = roundWordCount || ROUND_SIZE;
+  const total = roundWordCount || roundSize;
   // 全部过关（错词池清空）给3星，达到轮次上限仍有错词则按剩余量给星
   let rating = 3;
   if (wrongWords.length > 0) {
@@ -935,6 +995,7 @@ document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
 /* 初始化 */
 setMode(hasSR ? 'speak' : 'choice');
 updateVoiceStyleUI();
+updateRoundSizeUI();
 </script>
 </body>
 </html>
