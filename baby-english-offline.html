@@ -149,6 +149,11 @@
     background:#fff; color:#4A3B8C; box-shadow:0 4px 12px rgba(0,0,0,.08);
   }
   .btn-save { background:linear-gradient(135deg,#FF9A5A,#FF6B8B); color:#fff; box-shadow:0 6px 16px rgba(255,107,139,.35); }
+  .voice-sel {
+    flex:1; padding:12px; border:none; border-radius:20px; font-size:15px;
+    color:#4A3B8C; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.08);
+    outline:none; font-family:inherit;
+  }
   .btn-back {
     width:100%; padding:15px; border:none; border-radius:24px; cursor:pointer;
     font-size:18px; font-weight:700; color:#fff;
@@ -219,6 +224,10 @@
       修改后点"保存词库"，会永久保存在这台手机上；也可以导入 txt/json 文件。
     </div>
     <textarea id="wordText" spellcheck="false"></textarea>
+    <div class="set-row">
+      <select id="voiceSel" class="voice-sel" onchange="onVoiceChange(this.value)"></select>
+      <button class="btn-set" style="flex:0 0 auto;padding:12px 18px;" onclick="tryVoice()">🔊 试听</button>
+    </div>
     <div class="set-row">
       <button class="btn-set btn-save" onclick="saveWords()">💾 保存词库</button>
       <button class="btn-set" onclick="importFile()">📂 导入文件</button>
@@ -317,45 +326,69 @@ let lastMicFail = false;
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const hasSR = !!SR;
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && 'ontouchend' in document);
+const autoListenAllowed = hasSR && !isIOS;   // iPhone 上系统要求每次点击才能收音
 
 /* ================= 语音合成 ================= */
+/* 挑选最自然的英文发音人：优先 Natural / Neural / Samantha 等高质量音色 */
+const VOICE_PREFER = [/natural/i, /neural/i, /aria/i, /jenny/i, /samantha/i, /google us english/i, /karen/i, /moira/i, /tessa/i, /serena/i];
+function pickVoice(){
+  if (!('speechSynthesis' in window)) return null;
+  const voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  if (!voices.length) return null;
+  const saved = localStorage.getItem('babyTtsVoice');
+  if (saved) { const v = voices.find(v=>v.name===saved); if (v) return v; }
+  for (const p of VOICE_PREFER) {
+    const v = voices.find(v=>p.test(v.name));
+    if (v) return v;
+  }
+  return voices.find(v=>/en[-_]US/i.test(v.lang)) || voices[0];
+}
 function speak(text, rate, onend){
   if (!('speechSynthesis' in window)) { if(onend) onend(); return; }
   try { speechSynthesis.cancel(); } catch(e){}
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = rate || 0.75; u.pitch = 1.1;
-  const voices = speechSynthesis.getVoices();
-  const v = voices.find(v=>/en[-_]US/i.test(v.lang) && /female|Samantha|Google/i.test(v.name)) ||
-            voices.find(v=>/^en/i.test(v.lang));
+  u.lang = 'en-US'; u.rate = rate || 0.78; u.pitch = 1.05;
+  const v = pickVoice();
   if (v) u.voice = v;
   if (onend) u.onend = onend;
   speechSynthesis.speak(u);
 }
 if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged = ()=> speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = ()=>{ speechSynthesis.getVoices(); fillVoices(); };
   speechSynthesis.getVoices();
 }
 
 /* ================= 语音识别 ================= */
-let rec = null;
+/* 流式识别：边说边反馈，命中即判，不等整句结束，大幅降低延迟 */
+let rec = null, autoAttempt = false, listening = false;
 if (SR) {
   rec = new SR();
   rec.lang = 'en-US';
-  rec.interimResults = false;
+  rec.interimResults = true;
+  rec.continuous = false;
   rec.maxAlternatives = 5;
-  rec.onstart = ()=> { $('micBtn').classList.add('listening'); setTip('正在听你说…👂'); };
-  rec.onend   = ()=> { $('micBtn').classList.remove('listening'); };
+  rec.onstart = ()=> {
+    listening = true;
+    $('micBtn').classList.add('listening');
+    setTip(autoAttempt ? '我在听…大声念出来吧 👂' : '正在听你说…👂');
+  };
+  rec.onend   = ()=> { listening = false; $('micBtn').classList.remove('listening'); };
   rec.onerror = (e)=>{
+    listening = false;
     $('micBtn').classList.remove('listening');
+    const wasAuto = autoAttempt; autoAttempt = false;
     if (e.error === 'network' || e.error === 'service-not-allowed') {
       lastMicFail = true;
       setFeedback('hint','识别服务需要联网 ☁️ 现在可以点右上角切换"选一选"模式玩～');
       setTip('或等联网后再用麦克风跟读');
     } else if (e.error === 'not-allowed') {
-      setFeedback('hint','需要允许使用麦克风哦 🙏');
-      setTip('在浏览器设置里允许麦克风权限');
+      if (wasAuto) { setTip('点一下麦克风，开始跟读 🎤'); }
+      else { setFeedback('hint','需要允许使用麦克风哦 🙏'); setTip('在浏览器设置里允许麦克风权限'); }
     } else if (e.error === 'no-speech') {
       setFeedback('hint','没听到声音，再大声一点试试！📣');
+    } else if (e.error === 'aborted') {
+      /* 自动收音被系统打断，静默处理 */
     } else {
       setFeedback('hint','再试一次吧 💪');
     }
@@ -363,20 +396,33 @@ if (SR) {
   };
   rec.onresult = (e)=>{
     const alts = [];
-    for (let i=0;i<e.results[0].length;i++) alts.push(e.results[0][i].transcript);
-    checkAnswer(alts);
+    let isFinal = false;
+    for (let i = 0; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) isFinal = true;
+      for (let j = 0; j < r.length; j++) alts.push(r[j].transcript);
+    }
+    if (isMatch(alts)) {
+      // 命中目标词：立刻停止收音并判对，不等识别整句结束
+      try { rec.stop(); } catch(err){}
+      checkAnswer(alts);
+    } else if (!isFinal) {
+      // 中间过程实时显示，让宝宝知道正在听
+      const heard = normalize(alts[0] || '');
+      if (heard) setTip('听到：' + heard + '…');
+    } else {
+      checkAnswer(alts);
+    }
   };
 }
 
 function normalize(s){
   return s.toLowerCase().replace(/[.,!?]/g,'').replace(/\s+/g,' ').trim();
 }
-function checkAnswer(alts){
-  if (busy || revealed) return;
-  busy = true;
+function isMatch(alts){
   const target = order[idx].en;
   const tWords = target.split(' ');
-  const ok = alts.some(a=>{
+  return alts.some(a=>{
     const n = normalize(a);
     if (n === target) return true;
     if ((ALIAS[target]||[]).map(normalize).includes(n)) return true;
@@ -384,16 +430,20 @@ function checkAnswer(alts){
     if (tWords.every(w => n.split(' ').includes(w))) return true;
     return false;
   });
-  judge(ok);
+}
+function checkAnswer(alts){
+  if (busy || revealed) return;
+  busy = true;
+  judge(isMatch(alts));
 }
 function judge(ok){
   if (ok) {
     correctCnt++; addStar();
     setFeedback('good','🎉 答对啦！你真棒！');
-    speak('Great job!');
+    speak('Great job!', 1.0);
     confetti();
     $('card').classList.add('correct-glow');
-    setTimeout(()=>{ $('card').classList.remove('correct-glow'); nextWord(false); }, 1400);
+    setTimeout(()=>{ $('card').classList.remove('correct-glow'); nextWord(false); }, 1100);
   } else {
     setFeedback('bad','😅 不太对哦，再试一次！');
     speak('Try again');
@@ -453,8 +503,16 @@ function renderWord(){
   $('choices').style.display = useSpeak ? 'none' : 'grid';
   $('modeChip').textContent = useSpeak ? '🎤 跟读中' : '🔤 选一选';
   if (useSpeak) {
-    setFeedback('hint','按麦克风，大声念出来吧！🎤');
-    setTip('点我说话，念出图片上的东西');
+    setFeedback('hint','大声念出来吧！🎤');
+    setTip(autoListenAllowed ? '我在听，直接说就行 👂（也可点麦克风重新收音）' : '点麦克风，念出图片上的东西');
+    // 自动收音：卡片出现后自动开始听，省去每次按麦克风（iPhone 需手动点击）
+    if (autoListenAllowed) {
+      setTimeout(()=>{
+        if (!busy && !revealed && $('learnScreen').classList.contains('active') && !listening) {
+          startListen(true);
+        }
+      }, 800);
+    }
   } else {
     setFeedback('hint','哪个单词和图片配对呢？点一点！');
     setTip('');
@@ -533,9 +591,35 @@ function setFeedback(type, msg){
 function setTip(msg){ $('micTip').textContent = msg; }
 
 /* ================= 词库管理 ================= */
+function fillVoices(){
+  const sel = $('voiceSel');
+  if (!sel || !('speechSynthesis' in window)) return;
+  const voices = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  const saved = localStorage.getItem('babyTtsVoice') || '';
+  sel.innerHTML = '';
+  if (!voices.length) {
+    sel.innerHTML = '<option value="">暂无英文发音人</option>';
+    return;
+  }
+  voices.forEach(v=>{
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = v.name.replace(/Microsoft |Google |\(Desktop\)/g,'').slice(0,32) + ' · ' + v.lang;
+    if (v.name === saved || (!saved && v.name === (pickVoice()||{}).name)) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+function onVoiceChange(name){
+  if (name) localStorage.setItem('babyTtsVoice', name);
+  tryVoice();
+}
+function tryVoice(){
+  speak('Hello! Let us learn English together!', 0.85);
+}
 function openSettings(){
   $('wordText').value = wordsToText(WORDS);
   $('setMsg').textContent = '';
+  fillVoices();
   show('settingsScreen');
 }
 function closeSettings(){
@@ -616,10 +700,12 @@ function confetti(){
 }
 
 /* ================= 交互入口 ================= */
-function startListen(){
+function startListen(auto){
   if (!SR) return;
   if (busy || revealed) return;
-  try { rec.start(); } catch(e){}
+  try { speechSynthesis.cancel(); } catch(e){}   // 先停掉朗读，避免麦克风听到提示音
+  autoAttempt = !!auto;
+  try { rec.start(); } catch(e){ autoAttempt = false; }
 }
 document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
 
