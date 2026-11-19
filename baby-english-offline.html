@@ -103,6 +103,12 @@
   .num-pic.len2 { font-size:90px;  line-height:140px; height:140px; min-width:186px; }
   .num-pic.len3 { font-size:70px;  line-height:120px; height:120px; min-width:196px; }
   .num-pic.len4 { font-size:54px;  line-height:108px; height:108px; min-width:210px; }
+  /* 颜色圆块：纯色圆形，避免 emoji 歧义 */
+  .color-dot {
+    display:inline-block; width:150px; height:150px; border-radius:50%;
+    box-shadow:0 8px 20px rgba(0,0,0,.18), inset 0 -8px 18px rgba(0,0,0,.08);
+    border:3px solid rgba(255,255,255,.85);
+  }
   /* 版本号角标，用来确认是否加载了最新版 */
   .ver-badge { position:absolute; top:6px; right:10px; font-size:11px; color:#C9C4D6; }
   @keyframes floaty { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-10px) scale(1.04)} }
@@ -217,10 +223,10 @@
 
   <!-- 开始页 -->
   <div class="screen active" id="startScreen">
-    <span class="ver-badge">v4.1</span>
+    <span class="ver-badge">v4.2</span>
     <div class="big-emoji">🎈📚</div>
     <h1>宝宝学英语</h1>
-    <p>每轮随机学几个词，可自己设置（默认10）⭐<br>读错的会自动进入复习轮再来一遍 🔁<br>看图片 → 大声念出来 🎤</p>
+    <p>看图片直接念，自动识别不用点话筒 🎤<br>读错的会自动进入复习轮再来一遍 🔁<br>每轮学几个词可自己设置（默认10）⭐</p>
     <div class="mode-select">
       <button class="mode-btn" id="modeSpeak" onclick="setMode('speak')">🎤 跟读模式</button>
       <button class="mode-btn" id="modeChoice" onclick="setMode('choice')">🔤 选一选模式</button>
@@ -256,7 +262,7 @@
     <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
 
     <div class="card" id="card">
-      <span class="ver-badge">v4.1</span>
+      <span class="ver-badge">v4.2</span>
       <div class="pic" id="pic">🍎</div>
       <div class="zh-name" id="zhName">苹果</div>
       <div class="en-name" id="enName">apple</div>
@@ -323,13 +329,17 @@
 /* ================= 默认词库（分类） ================= */
 const W = (en, zh, emoji, cat) => ({en, zh, emoji, cat});
 
-const COLOR_WORDS = [
-  W("red","红色","🔴","color"), W("yellow","黄色","🟡","color"),
-  W("blue","蓝色","🔵","color"), W("green","绿色","🟢","color"),
-  W("orange","橙色","🟠","color"), W("purple","紫色","🟣","color"),
-  W("pink","粉色","🌸","color"), W("black","黑色","⚫","color"),
-  W("white","白色","⚪","color"), W("brown","棕色","🟤","color")
-];
+/* 颜色词用 CSS 圆形色块显示（避免 emoji 花等歧义），色值放 color 字段 */
+const COLOR_WORDS = (function(){
+  const defs = [
+    ["red","红色","#F4433C"], ["yellow","黄色","#FFC72C"],
+    ["blue","蓝色","#2E86DE"], ["green","绿色","#3CB653"],
+    ["orange","橙色","#FF8C1A"], ["purple","紫色","#9B59D0"],
+    ["pink","粉色","#FF7FB0"], ["black","黑色","#2B2B2B"],
+    ["white","白色","#FFFFFF"], ["brown","棕色","#8A5A3B"]
+  ];
+  return defs.map(d=>{ const w = W(d[0], d[1], "🔴", "color"); w.color = d[2]; return w; });
+})();
 const FRUIT_WORDS = [
   W("apple","苹果","🍎","fruit"), W("banana","香蕉","🍌","fruit"),
   W("grape","葡萄","🍇","fruit"), W("orange fruit","橙子","🍊","fruit"),
@@ -379,7 +389,11 @@ const ALIAS = {
   "duck":["a duck"], "fish":["a fish"], "lion":["a lion"], "pig":["a pig"],
   "tiger":["a tiger"], "apple":["an apple"], "egg":["an egg","eggs"],
   "orange fruit":["orange","an orange"], "ice cream":["icecream","cream"],
-  "one hundred":["hundred","a hundred"], "one thousand":["thousand","a thousand"]
+  "one hundred":["hundred","a hundred"], "one thousand":["thousand","a thousand"],
+  // 数字谐音容错（宝宝发音不准也尽量算对）
+  "one":["wun","won"], "two":["tu","too"], "three":["sree","free"],
+  "four":["for"], "five":["fav"], "six":["siks"], "seven":["sevn"],
+  "eight":["ait"], "ten":["tin"], "red":["wred"], "green":["gween"]
 };
 const STORE_KEY = "babyEnglishWords_v3";   // 升级版本号以载入扩充词库
 
@@ -476,7 +490,7 @@ const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const hasSR = !!SR;
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && 'ontouchend' in document);
-const autoListenAllowed = hasSR && !isIOS;   // iPhone 上系统要求每次点击才能收音
+const autoListenAllowed = hasSR;   // 切词后自动开始识别（iOS 若拦截则回退到点麦克风）
 
 /* ================= 语音合成 ================= */
 /* 声音风格：child=童声(高音调+优选年轻女声) / adult=成人自然声 */
@@ -531,6 +545,7 @@ if ('speechSynthesis' in window) {
 /* ================= 语音识别 ================= */
 /* 流式识别：边说边反馈，命中即判，不等整句结束，大幅降低延迟 */
 let rec = null, autoAttempt = false, listening = false;
+let autoFailStreak = 0;   // 自动收音连续失败次数，超过则停止自动尝试（iOS 手势限制）
 if (SR) {
   rec = new SR();
   rec.lang = 'en-US';
@@ -539,6 +554,7 @@ if (SR) {
   rec.maxAlternatives = 5;
   rec.onstart = ()=> {
     listening = true;
+    autoFailStreak = 0;   // 成功收音，重置失败计数
     $('micBtn').classList.add('listening');
     setTip(autoAttempt ? '我在听…大声念出来 👂 念完自动判定' : '我在听…念完再点一下麦克风就判定 ✅');
   };
@@ -552,7 +568,11 @@ if (SR) {
       setFeedback('hint','识别服务需要联网 ☁️ 现在可以点右上角切换"选一选"模式玩～');
       setTip('或等联网后再用麦克风跟读');
     } else if (e.error === 'not-allowed') {
-      if (wasAuto) { setTip('点一下麦克风，开始跟读 🎤'); }
+      if (wasAuto) {
+        autoFailStreak++;
+        if (autoFailStreak >= 2) { setTip('点一下麦克风开始跟读 🎤'); }
+        else setTip('点一下麦克风，开始跟读 🎤');
+      }
       else { setFeedback('hint','需要允许使用麦克风哦 🙏'); setTip('在浏览器设置里允许麦克风权限'); }
     } else if (e.error === 'no-speech') {
       setFeedback('hint','没听到声音，再大声一点试试！📣');
@@ -602,22 +622,36 @@ function editDist(a, b){
   }
   return prev[n];
 }
+/* 把识别文本里的数字转成英文单词，如 "100"→"one hundred"、"1"→"one" */
+const DIGIT_TO_EN = {"0":"zero","1":"one","2":"two","3":"three","4":"four","5":"five",
+  "6":"six","7":"seven","8":"eight","9":"nine","10":"ten","11":"eleven","12":"twelve",
+  "13":"thirteen","14":"fourteen","15":"fifteen","16":"sixteen","17":"seventeen",
+  "18":"eighteen","19":"nineteen","20":"twenty","100":"one hundred","1000":"one thousand"};
+function expandDigits(s){
+  // "100" → "one hundred"；"one hundred" 保持不变；混合如 "1 hundred" → "one hundred"
+  return s.split(' ').map(tok => DIGIT_TO_EN[tok] || tok).join(' ');
+}
 /* 返回 'strict' 精确 / 'fuzzy' 接近 / null 不匹配 */
 function matchType(alts){
-  const target = order[idx].en;
+  const w = order[idx];
+  const target = w.en;
   const tWords = target.split(' ');
+  const targetNum = (w.num !== undefined && w.num !== null) ? String(w.num) : EN_TO_NUM[target] || null;
   const aliases = (ALIAS[target]||[]).map(normalize);
   let fuzzy = false;
   for (const a of alts){
-    const n = normalize(a);
-    if (!n) continue;
+    const raw = normalize(a);
+    if (!raw) continue;
+    const n = expandDigits(raw);   // 数字→英文，解决"听到100却不过"的问题
     if (n === target) return 'strict';
-    if (aliases.includes(n)) return 'strict';
+    if (raw === targetNum) return 'strict';           // 直接念出数字（如"100"）
+    if (aliases.includes(n) || (targetNum && aliases.includes(raw))) return 'strict';
     if (n.split(' ').includes(target)) return 'strict';
-    if (tWords.length > 1 && tWords.every(w => n.split(' ').includes(w))) return 'strict';
-    // 容错判断：短词允许 1 个字母差异，长词允许约 1/3 差异
-    const tol = target.length <= 3 ? 1 : Math.max(2, Math.floor(target.length/3));
+    if (tWords.length > 1 && tWords.every(wd => n.split(' ').includes(wd))) return 'strict';
+    // 容错判断（放宽）：短词允许 1~2 个字母差异，长词允许约 1/2 差异
+    const tol = target.length <= 3 ? 1 : Math.max(2, Math.ceil(target.length/2));
     if (editDist(n, target) <= tol) fuzzy = true;
+    if (targetNum && /^\d+$/.test(raw) && editDist(raw, targetNum) <= 1) fuzzy = true; // 数字念错一位也算
   }
   return fuzzy ? 'fuzzy' : null;
 }
@@ -646,14 +680,18 @@ function judge(ok, fuzzy){
     soundWin();
     confetti();
     $('card').classList.add('correct-glow');
-    setTimeout(()=>{ $('card').classList.remove('correct-glow'); nextWord(false); }, 1100);
+    setTimeout(()=>{ $('card').classList.remove('correct-glow'); nextWord(false); }, 700);
   } else {
     addWrong(cur);      // 答错记入错词池，稍后反复出现
     setFeedback('bad','😅 不太对哦，再试一次！');
     speak('Try again');
     soundFail();
     $('card').classList.add('shake');
-    setTimeout(()=>{ $('card').classList.remove('shake'); busy=false; }, 500);
+    setTimeout(()=>{
+      $('card').classList.remove('shake'); busy=false;
+      // 答错后自动重新收音，宝宝可直接再念一遍（不用点麦克风）
+      if (autoListenAllowed && !revealed && mode==='speak' && !listening) startListen(true);
+    }, 500);
   }
 }
 
@@ -705,6 +743,8 @@ function renderWord(){
   const numStr = numForWord(w);
   if (numStr) {
     $('pic').innerHTML = '<span class="num-pic len' + numStr.length + '">' + numStr + '</span>';
+  } else if (w.color) {
+    $('pic').innerHTML = '<span class="color-dot" style="background:' + w.color + '"></span>';
   } else {
     $('pic').textContent = w.emoji || '🔤';
   }
@@ -720,14 +760,14 @@ function renderWord(){
   $('roundTitle').textContent = round > 1 ? ('🔁 复习第 ' + (round-1) + ' 轮') : '宝宝学英语';
   if (useSpeak) {
     setFeedback('hint','大声念出来吧！🎤');
-    setTip(autoListenAllowed ? '我在听，直接说就行 👂 念完自动判定' : '点麦克风说话，念完再点一下就判定 ✅');
-    // 自动收音：卡片出现后自动开始听，省去每次按麦克风（iPhone 需手动点击）
+    setTip('我在听，直接说就行 👂 念完自动判定');
+    // 自动收音：切换单词后立即自动开始识别，无需点麦克风
     if (autoListenAllowed) {
       setTimeout(()=>{
         if (!busy && !revealed && $('learnScreen').classList.contains('active') && !listening) {
           startListen(true);
         }
-      }, 800);
+      }, 450);
     }
   } else {
     setFeedback('hint','哪个单词和图片配对呢？点一点！');
@@ -974,6 +1014,8 @@ function confetti(){
 function startListen(auto){
   if (!SR) return;
   if (busy || revealed) return;
+  // 自动模式下若已连续多次被系统拒绝，则不再自动尝试，等用户手动点麦克风
+  if (auto && autoFailStreak >= 3) return;
   // 正在收音时再点一下麦克风 = 停止收音，立刻判定结果
   if (listening) {
     try { rec.stop(); } catch(e){}
